@@ -1,1 +1,102 @@
+generator client { provider = "prisma-client-js" }
+datasource db { provider = "postgresql"; url = env("DATABASE_URL") }
+
+enum Role { ADMIN COMPLIANCE OPERATOR VIEWER }
+enum KycStatus { PENDING VERIFIED REJECTED EXPIRED }
+enum RiskLevel { LOW MEDIUM HIGH }
+enum DocumentKind { PAN AADHAAR PASSPORT ADDRESS VIDEO SELFIE OTHER }
+enum DocumentStatus { QUARANTINED VERIFIED REJECTED }
+enum Direction { BUY SELL }
+enum PaymentMethod { CASH CDM UPI BANK_TRANSFER IMPS NEFT RTGS OTHER }
+enum TransactionStatus { DRAFT PROCESSING REVIEW COMPLETED CANCELLED }
+
+model User {
+  id String @id @default(cuid())
+  email String @unique
+  displayName String
+  passwordHash String
+  totpSecretCiphertext String
+  role Role @default(VIEWER)
+  active Boolean @default(true)
+  failedLogins Int @default(0)
+  lockedUntil DateTime?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  transactions Transaction[]
+  documents KycDocument[]
+  auditLogs AuditLog[]
+}
+
+model Client {
+  id String @id @default(cuid())
+  clientCode String @unique
+  fullName String
+  phoneCiphertext String
+  emailCiphertext String?
+  panHash String @unique
+  addressCiphertext String?
+  riskLevel RiskLevel @default(LOW)
+  kycStatus KycStatus @default(PENDING)
+  consentAt DateTime?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  transactions Transaction[]
+  documents KycDocument[]
+  @@index([fullName])
+}
+
+model KycDocument {
+  id String @id @default(cuid())
+  clientId String
+  kind DocumentKind
+  objectKey String @unique
+  originalNameCiphertext String
+  mimeType String
+  sizeBytes Int
+  sha256 String
+  status DocumentStatus @default(QUARANTINED)
+  uploadedById String
+  createdAt DateTime @default(now())
+  client Client @relation(fields: [clientId], references: [id], onDelete: Restrict)
+  uploadedBy User @relation(fields: [uploadedById], references: [id], onDelete: Restrict)
+  @@index([clientId, createdAt])
+}
+
+model Transaction {
+  id String @id @default(cuid())
+  transactionId String @unique
+  clientId String
+  direction Direction
+  usdtAmount Decimal @db.Decimal(24, 8)
+  inrAmountPaise BigInt
+  ratePaise BigInt
+  paymentMethod PaymentMethod
+  paymentReferenceCiphertext String?
+  walletAddressCiphertext String
+  blockchainTxHash String?
+  status TransactionStatus @default(DRAFT)
+  notesCiphertext String?
+  createdById String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  client Client @relation(fields: [clientId], references: [id], onDelete: Restrict)
+  createdBy User @relation(fields: [createdById], references: [id], onDelete: Restrict)
+  @@index([clientId, createdAt])
+  @@index([createdAt])
+}
+
+model AuditLog {
+  id String @id @default(cuid())
+  actorId String?
+  action String
+  entityType String
+  entityId String
+  detailsJson String?
+  ipHash String?
+  userAgent String?
+  createdAt DateTime @default(now())
+  actor User? @relation(fields: [actorId], references: [id], onDelete: SetNull)
+  @@index([entityType, entityId, createdAt])
+  @@index([createdAt])
+}
 
